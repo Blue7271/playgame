@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Bot, X, Send, Sparkles, ChevronRight } from 'lucide-react';
@@ -149,6 +149,12 @@ export default function AIAssistant() {
   const [messages, setMessages] = useState<AIMessage[]>([AI_FLOW.start]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const idCounterRef = useRef(0);
+
+  const nextId = useCallback(() => {
+    idCounterRef.current += 1;
+    return String(idCounterRef.current);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -160,7 +166,7 @@ export default function AIAssistant() {
 
     // Add user message
     const userMsg: AIMessage = {
-      id: String(Date.now()),
+      id: nextId(),
       type: 'user',
       text: optionData.options?.find(o => o.action === action)?.label || action,
     };
@@ -266,12 +272,12 @@ export default function AIAssistant() {
                   if (e.key === 'Enter') {
                     const text = (e.target as HTMLInputElement).value;
                     if (text.trim()) {
-                      setMessages(prev => [...prev, { id: String(Date.now()), type: 'user', text }]);
+                      setMessages(prev => [...prev, { id: nextId(), type: 'user', text }]);
                       (e.target as HTMLInputElement).value = '';
                       setIsTyping(true);
                       setTimeout(() => {
                         setMessages(prev => [...prev, {
-                          id: String(Date.now() + 1),
+                          id: nextId(),
                           type: 'bot',
                           text: '我正在理解你的问题，请点击上方选项按钮获取更精准的帮助哦！',
                           options: [
