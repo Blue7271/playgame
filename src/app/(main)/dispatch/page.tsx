@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
-  Search, SlidersHorizontal, Zap, Star, Volume2, Mic
+  Search, SlidersHorizontal, Zap, Star, Volume2, Mic,
+  X, ChevronRight, Gamepad2
 } from 'lucide-react';
 
 export default function DispatchPage() {
@@ -16,6 +17,12 @@ export default function DispatchPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [isAutoMatching, setIsAutoMatching] = useState(false);
+
+  // Auto-match quick selection state
+  const [showAutoPanel, setShowAutoPanel] = useState(false);
+  const [autoGameId, setAutoGameId] = useState<string | null>(null);
+  const [autoGender, setAutoGender] = useState<'male' | 'female' | null>(null);
+  const [autoRank, setAutoRank] = useState<string | null>(null);
 
   const userGames = useMemo(() => {
     if (!user?.selectedGames) return [];
@@ -40,16 +47,42 @@ export default function DispatchPage() {
     return result;
   }, [players, dispatchGameId, dispatchGender, dispatchPriceRange, searchQuery]);
 
-  const handleAutoMatch = () => {
+  const handleAutoMatchConfirm = () => {
+    setShowAutoPanel(false);
     setIsAutoMatching(true);
+
+    // Filter players based on auto-match criteria
+    let candidates = players.filter(p => p.isOnline);
+    if (autoGameId) {
+      candidates = candidates.filter(p => p.gameId === autoGameId);
+    }
+    if (autoGender) {
+      candidates = candidates.filter(p => p.gender === autoGender);
+    }
+    if (autoRank) {
+      candidates = candidates.filter(p => p.rank === autoRank);
+    }
+
     setTimeout(() => {
       setIsAutoMatching(false);
-      const onlinePlayers = players.filter(p => p.isOnline);
-      if (onlinePlayers.length > 0) {
-        const randomPlayer = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
-        setSelectedPlayer(randomPlayer.id);
+      if (candidates.length > 0) {
+        const bestMatch = candidates[Math.floor(Math.random() * candidates.length)];
+        setSelectedPlayer(bestMatch.id);
+        // Scroll to the matched player
+        setTimeout(() => {
+          const el = document.getElementById(`player-${bestMatch.id}`);
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       }
     }, 2500);
+  };
+
+  const openAutoPanel = () => {
+    // Reset auto-match selections
+    setAutoGameId(userGames.length === 1 ? userGames[0].id : null);
+    setAutoGender(null);
+    setAutoRank(null);
+    setShowAutoPanel(true);
   };
 
   return (
@@ -191,7 +224,7 @@ export default function DispatchPage() {
       {/* Auto Match Button */}
       <div className="px-4 pb-4">
         <Button
-          onClick={handleAutoMatch}
+          onClick={openAutoPanel}
           disabled={isAutoMatching}
           className="w-full h-12 gradient-pink text-white rounded-xl text-sm font-bold neon-glow hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
         >
@@ -224,6 +257,7 @@ export default function DispatchPage() {
             return (
               <div
                 key={player.id}
+                id={`player-${player.id}`}
                 onClick={() => setSelectedPlayer(isSelected ? null : player.id)}
                 className={`glass-card rounded-2xl p-4 transition-all cursor-pointer ${
                   isSelected ? 'border-purple-500/50 neon-glow' : 'hover:bg-white/8'
@@ -307,8 +341,178 @@ export default function DispatchPage() {
               </div>
             );
           })}
+
+          {filteredPlayers.length === 0 && (
+            <div className="text-center py-12">
+              <Gamepad2 className="w-12 h-12 text-white/10 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">暂无符合条件的陪玩师</p>
+              <p className="text-xs text-muted-foreground mt-1">试试调整筛选条件吧</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Auto-Match Quick Selection Panel */}
+      {showAutoPanel && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowAutoPanel(false)}
+          />
+
+          {/* Panel */}
+          <div className="relative w-full max-w-[480px] bg-[#12121F] rounded-t-3xl border-t border-white/10 animate-slide-up">
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white">一键自动派单</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">选择你的需求，系统智能匹配</p>
+              </div>
+              <button
+                onClick={() => setShowAutoPanel(false)}
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 pb-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Step 1: Select Game */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center text-[10px] text-white font-bold">1</span>
+                  <span className="text-sm font-medium text-white">选择游戏</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {userGames.map(game => (
+                    <button
+                      key={game.id}
+                      onClick={() => setAutoGameId(autoGameId === game.id ? null : game.id)}
+                      className={`flex flex-col items-center p-3 rounded-xl transition-all ${
+                        autoGameId === game.id
+                          ? 'gradient-primary text-white neon-glow'
+                          : 'glass-card hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-2xl mb-1">{game.icon}</span>
+                      <span className="text-[10px] font-medium text-center leading-tight">{game.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 2: Select Gender */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center text-[10px] text-white font-bold">2</span>
+                  <span className="text-sm font-medium text-white">选择性别</span>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAutoGender(autoGender === 'male' ? null : 'male')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                      autoGender === 'male'
+                        ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                        : 'glass-card text-muted-foreground hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="text-lg">♂</span> 男陪玩
+                  </button>
+                  <button
+                    onClick={() => setAutoGender(autoGender === 'female' ? null : 'female')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                      autoGender === 'female'
+                        ? 'bg-pink-500/20 border border-pink-500/50 text-pink-400'
+                        : 'glass-card text-muted-foreground hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="text-lg">♀</span> 女陪玩
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 3: Select Rank */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center text-[10px] text-white font-bold">3</span>
+                  <span className="text-sm font-medium text-white">段位要求</span>
+                  <span className="text-[10px] text-muted-foreground">(可选)</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {RANKS.map(rank => (
+                    <button
+                      key={rank}
+                      onClick={() => setAutoRank(autoRank === rank ? null : rank)}
+                      className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${
+                        autoRank === rank
+                          ? 'gradient-primary text-white'
+                          : 'bg-white/5 text-muted-foreground hover:bg-white/10'
+                      }`}
+                    >
+                      {rank}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="glass-card rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-4 h-4 text-pink-400" />
+                  <span className="text-xs font-medium text-white">匹配条件</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {autoGameId ? (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-purple-500/20 text-purple-400">
+                      {GAMES.find(g => g.id === autoGameId)?.icon} {GAMES.find(g => g.id === autoGameId)?.name}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 text-muted-foreground">
+                      全部游戏
+                    </span>
+                  )}
+                  {autoGender ? (
+                    <span className={`text-[10px] px-2 py-1 rounded-full ${
+                      autoGender === 'female' ? 'bg-pink-500/20 text-pink-400' : 'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {autoGender === 'female' ? '♀ 女' : '♂ 男'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 text-muted-foreground">
+                      不限性别
+                    </span>
+                  )}
+                  {autoRank ? (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400">
+                      ⭐ {autoRank}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 text-muted-foreground">
+                      不限段位
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Confirm Button */}
+              <Button
+                onClick={handleAutoMatchConfirm}
+                className="w-full h-12 gradient-pink text-white rounded-xl text-sm font-bold neon-glow hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              >
+                <Zap className="w-5 h-5" />
+                开始匹配
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
