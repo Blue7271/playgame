@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Send, Languages, Plus, X, ChevronDown,
   UserPlus, MoreHorizontal, Loader2, Mic, MicOff,
-  Volume2, VolumeX, PhoneOff
+  Volume2, VolumeX
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -651,20 +651,6 @@ export default function ChannelsPage() {
             }`}
           >
             {micOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-          </button>
-
-          {/* Hang up */}
-          <button
-            onClick={() => {
-              setRoomStatus('idle');
-              setMessages([]);
-              setMembers([]);
-              setMicOn(false);
-              joinedRef.current = false;
-            }}
-            className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 hover:bg-red-500/30 transition-all"
-          >
-            <PhoneOff className="w-4 h-4" />
           </button>
         </div>
       </div>
