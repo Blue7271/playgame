@@ -63,3 +63,31 @@
 
 - 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
 - Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+
+## PlayMate 游戏陪玩平台 - 项目结构
+
+### 核心页面路由
+- `/` - 登录/注册页面（手机+邮箱）
+- `/select-games` - 游戏偏好选择（最多6个）
+- `/dispatch` - 派单大厅（手动筛选+自动派单）
+- `/channels` - 开黑语音频道（实时翻译）
+- `/profile` - 个人中心
+
+### 核心文件
+- `src/lib/store.ts` - Zustand 全局状态管理（用户、派单筛选、频道等）
+- `src/lib/games.ts` - 游戏数据、段位、声音标签等常量
+- `src/components/ai-assistant.tsx` - AI 24小时自助导航助手（浮动按钮+对话式引导）
+- `src/app/(main)/layout.tsx` - 主应用布局（底部Tab导航+鉴权守卫）
+
+### 状态管理
+使用 Zustand 管理全局状态，包括：
+- 用户认证状态（`user`, `isAuthenticated`, `hasSelectedGames`）
+- 派单筛选条件（游戏、性别、价格、段位、声音、备注）
+- 陪玩师列表和频道列表（mock数据）
+- AI助手开关状态
+
+### 设计风格
+- 暗色电竞风格，主色紫蓝渐变
+- 移动端优先，max-width 480px 居中
+- 毛玻璃卡片效果 + 霓虹光晕
+- 详见 `DESIGN.md`
