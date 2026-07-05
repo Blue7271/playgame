@@ -9,12 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
   Search, SlidersHorizontal, Zap, Star, Volume2, Mic,
-  X, ChevronRight, Gamepad2, MessageSquare, Radio
+  X, ChevronRight, Gamepad2
 } from 'lucide-react';
 
 export default function DispatchPage() {
   const router = useRouter();
-  const { user, players, dispatchGameId, dispatchGender, dispatchPriceRange, dispatchNote, setDispatchFilters, setMatchedCompanion, setRoomStatus, setRoomMode } = useAppStore();
+  const { user, players, dispatchGameId, dispatchGender, dispatchPriceRange, dispatchNote, setDispatchFilters, setMatchedCompanion, setRoomStatus } = useAppStore();
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -25,7 +25,6 @@ export default function DispatchPage() {
   const [autoGameId, setAutoGameId] = useState<string | null>(null);
   const [autoGender, setAutoGender] = useState<'male' | 'female' | null>(null);
   const [autoRank, setAutoRank] = useState<string | null>(null);
-  const [autoMode, setAutoMode] = useState<'chat' | 'freemic'>('chat');
 
   const userGames = useMemo(() => {
     if (!user?.selectedGames) return [];
@@ -70,9 +69,8 @@ export default function DispatchPage() {
       setIsAutoMatching(false);
       if (candidates.length > 0) {
         const bestMatch = candidates[Math.floor(Math.random() * candidates.length)];
-        // Store matched companion, set room mode and status, then navigate
+        // Store matched companion, set room status, then navigate
         setMatchedCompanion(bestMatch);
-        setRoomMode(autoMode);
         setRoomStatus('waiting');
         router.push('/channels');
       }
@@ -463,40 +461,6 @@ export default function DispatchPage() {
                 </div>
               </div>
 
-              {/* Step 4: Select Room Mode */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center text-[10px] text-white font-bold">4</span>
-                  <span className="text-sm font-medium text-white">开黑模式</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setAutoMode('chat')}
-                    className={`relative p-4 rounded-xl text-left transition-all ${
-                      autoMode === 'chat'
-                        ? 'gradient-primary text-white neon-glow'
-                        : 'glass-card hover:bg-white/10'
-                    }`}
-                  >
-                    <MessageSquare className={`w-6 h-6 mb-2 ${autoMode === 'chat' ? 'text-white' : 'text-purple-400'}`} />
-                    <p className="text-sm font-bold text-white">文字聊天</p>
-                    <p className="text-[10px] text-white/60 mt-0.5">语音消息 + 自动翻译</p>
-                  </button>
-                  <button
-                    onClick={() => setAutoMode('freemic')}
-                    className={`relative p-4 rounded-xl text-left transition-all ${
-                      autoMode === 'freemic'
-                        ? 'gradient-primary text-white neon-glow'
-                        : 'glass-card hover:bg-white/10'
-                    }`}
-                  >
-                    <Radio className={`w-6 h-6 mb-2 ${autoMode === 'freemic' ? 'text-white' : 'text-pink-400'}`} />
-                    <p className="text-sm font-bold text-white">自由麦</p>
-                    <p className="text-[10px] text-white/60 mt-0.5">全程开麦，实时语音</p>
-                  </button>
-                </div>
-              </div>
-
               {/* Summary */}
               <div className="glass-card rounded-xl p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -533,11 +497,6 @@ export default function DispatchPage() {
                       不限段位
                     </span>
                   )}
-                  <span className={`text-[10px] px-2 py-1 rounded-full ${
-                    autoMode === 'chat' ? 'bg-purple-500/20 text-purple-400' : 'bg-pink-500/20 text-pink-400'
-                  }`}>
-                    {autoMode === 'chat' ? '💬 文字聊天' : '🎙️ 自由麦'}
-                  </span>
                 </div>
               </div>
 
