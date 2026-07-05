@@ -62,6 +62,10 @@ interface AppState {
   // Channels
   channels: VoiceChannel[];
 
+  // Matched companion & room state
+  matchedCompanion: PlayerCompanion | null;
+  roomStatus: 'idle' | 'waiting' | 'active';
+
   // AI Assistant
   isAIAssistantOpen: boolean;
 
@@ -77,6 +81,8 @@ interface AppState {
     voiceTag: string;
     note: string;
   }>) => void;
+  setMatchedCompanion: (companion: PlayerCompanion | null) => void;
+  setRoomStatus: (status: 'idle' | 'waiting' | 'active') => void;
   toggleAIAssistant: () => void;
   logout: () => void;
 }
@@ -116,6 +122,8 @@ export const useAppStore = create<AppState>((set) => ({
   dispatchNote: '',
   players: MOCK_PLAYERS,
   channels: MOCK_CHANNELS,
+  matchedCompanion: null,
+  roomStatus: 'idle',
   isAIAssistantOpen: false,
 
   setUser: (user) => set({ user, isAuthenticated: true }),
@@ -132,6 +140,8 @@ export const useAppStore = create<AppState>((set) => ({
     dispatchVoiceTag: filters.voiceTag ?? state.dispatchVoiceTag,
     dispatchNote: filters.note ?? state.dispatchNote,
   })),
+  setMatchedCompanion: (companion) => set({ matchedCompanion: companion }),
+  setRoomStatus: (status) => set({ roomStatus: status }),
   toggleAIAssistant: () => set((state) => ({ isAIAssistantOpen: !state.isAIAssistantOpen })),
   logout: () => set({
     user: null,
@@ -144,6 +154,8 @@ export const useAppStore = create<AppState>((set) => ({
     dispatchRank: null,
     dispatchVoiceTag: null,
     dispatchNote: '',
+    matchedCompanion: null,
+    roomStatus: 'idle',
     isAIAssistantOpen: false,
   }),
 }));

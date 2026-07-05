@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import { GAMES, RANKS, VOICE_TAGS } from '@/lib/games';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,8 @@ import {
 } from 'lucide-react';
 
 export default function DispatchPage() {
-  const { user, players, dispatchGameId, dispatchGender, dispatchPriceRange, dispatchNote, setDispatchFilters } = useAppStore();
+  const router = useRouter();
+  const { user, players, dispatchGameId, dispatchGender, dispatchPriceRange, dispatchNote, setDispatchFilters, setMatchedCompanion, setRoomStatus } = useAppStore();
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -67,12 +69,10 @@ export default function DispatchPage() {
       setIsAutoMatching(false);
       if (candidates.length > 0) {
         const bestMatch = candidates[Math.floor(Math.random() * candidates.length)];
-        setSelectedPlayer(bestMatch.id);
-        // Scroll to the matched player
-        setTimeout(() => {
-          const el = document.getElementById(`player-${bestMatch.id}`);
-          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+        // Store matched companion and set room to waiting, then navigate
+        setMatchedCompanion(bestMatch);
+        setRoomStatus('waiting');
+        router.push('/channels');
       }
     }, 2500);
   };

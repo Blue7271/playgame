@@ -5,7 +5,7 @@ import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import {
   Send, Languages, Plus, X, ChevronDown,
-  UserPlus, Volume2, MoreHorizontal
+  UserPlus, MoreHorizontal, Loader2
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -43,25 +43,23 @@ const TRANSLATION_LANGUAGES = [
 // Mock translations for demo
 const MOCK_TRANSLATIONS: Record<string, Record<string, string>> = {
   'en': {
-    '大家好，一起开黑吗？': 'Hey everyone, wanna play together?',
-    '好的，我玩射手': 'OK, I\'ll play marksman',
-    '我选蔡文姬跟你，放心交给我': 'I\'ll pick Cai Wenji to support you, leave it to me!',
+    '你好呀，我来了！这局我打什么位置？': 'Hey, I\'m here! What position should I play?',
+    '我玩射手，你辅助我': 'I\'ll play marksman, you support me',
+    '好的，我选蔡文姬跟你，放心交给我': 'OK, I\'ll pick Cai Wenji to support you, leave it to me!',
+    '开团开团！': 'Let\'s team fight! Let\'s go!',
     'GG！刚才那波团战太精彩了': 'GG! That team fight was amazing!',
     '等等我，马上到': 'Wait for me, I\'ll be right there',
-    '开团开团！': 'Let\'s team fight! Let\'s go!',
-    'Hello everyone! Ready to start?': 'Hello everyone! Ready to start?',
-    'I\'ll play support, don\'t worry': 'I\'ll play support, don\'t worry',
+    '好的，我玩射手': 'OK, I\'ll play marksman',
+    '大家好，一起开黑吗？': 'Hey everyone, wanna play together?',
   },
   'ja': {
-    '大家好，一起开黑吗？': 'みんな、一緒にプレイしない？',
-    '好的，我玩射手': 'わかった、私はマークスマンやるよ',
-    '我选蔡文姬跟你，放心交给我': '蔡文姫ピックしてサポートするよ、任せて！',
-    'GG！刚才那波团战太精彩了': 'GG！さっきのチームファイト最高だった！',
+    '你好呀，我来了！这局我打什么位置？': 'やっほー、来たよ！今日はどのポジションやる？',
+    '我玩射手，你辅助我': '私がマークスマンやるから、サポートして',
+    '好的，我选蔡文姬跟你，放心交给我': 'わかった、蔡文姫ピックしてサポートするよ、任せて！',
   },
   'ko': {
-    '大家好，一起开黑吗？': '다 같이 게임할까?',
-    '好的，我玩射手': '좋아, 내가 원딜 할게',
-    '我选蔡文姬跟你，放心交给我': '채문기 픽해서 서포트할게, 나한테 맡겨!',
+    '你好呀，我来了！这局我打什么位置？': '안녕, 나 왔어! 이번 판 어떤 포지션 할까?',
+    '我玩射手，你辅助我': '내가 원딜 할게, 너 서포트 해줘',
   },
 };
 
@@ -73,7 +71,7 @@ function getTranslation(text: string, targetLang: string): string | undefined {
 }
 
 export default function ChannelsPage() {
-  const { user } = useAppStore();
+  const { user, roomStatus, matchedCompanion, setRoomStatus } = useAppStore();
   const idCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const tsRef = useRef(1720000200000);
@@ -101,15 +99,25 @@ export default function ChannelsPage() {
   const [showMembers, setShowMembers] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [waitingDots, setWaitingDots] = useState('');
 
-  // Group members
-  const [members, setMembers] = useState<Member[]>([
-    { id: 'me', nickname: user?.nickname || '我', avatar: user?.avatar || '🎮', isOnline: true, role: 'owner' },
-    { id: 'c1', nickname: '甜心小鹿', avatar: '🦌', isOnline: true, role: 'companion' },
-    { id: 'c2', nickname: '暗夜猎手', avatar: '🐺', isOnline: true, role: 'member' },
-    { id: 'c3', nickname: '星辰大海', avatar: '🌟', isOnline: true, role: 'member' },
-    { id: 'c4', nickname: 'Moonlight', avatar: '🌙', isOnline: false, role: 'member' },
-  ]);
+  // Build initial members based on whether we came from auto-dispatch
+  const [members, setMembers] = useState<Member[]>(() => {
+    const base: Member[] = [
+      { id: 'me', nickname: user?.nickname || '我', avatar: user?.avatar || '🎮', isOnline: true, role: 'owner' },
+    ];
+    // If we have a matched companion and room is active, add them
+    if (matchedCompanion && roomStatus === 'active') {
+      base.push({
+        id: matchedCompanion.id,
+        nickname: matchedCompanion.nickname,
+        avatar: matchedCompanion.avatar,
+        isOnline: true,
+        role: 'companion',
+      });
+    }
+    return base;
+  });
 
   // Available players to invite
   const availableToInvite = [
@@ -119,38 +127,62 @@ export default function ChannelsPage() {
     { id: 'inv4', nickname: '风暴骑士', avatar: '🛡️' },
   ];
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: '1', sender: '甜心小鹿', avatar: '🦌',
-      text: '大家好，一起开黑吗？', originalLang: 'zh',
-      timestamp: 1720000000000, isMe: false,
-    },
-    {
-      id: '2', sender: '暗夜猎手', avatar: '🐺',
-      text: 'Hello everyone! Ready to start?', originalLang: 'en',
-      timestamp: 1720000030000, isMe: false,
-    },
-    {
-      id: '3', sender: user?.nickname || '我', avatar: user?.avatar || '🎮',
-      text: '好的，我玩射手', originalLang: 'zh',
-      timestamp: 1720000060000, isMe: true,
-    },
-    {
-      id: '4', sender: '甜心小鹿', avatar: '🦌',
-      text: '我选蔡文姬跟你，放心交给我', originalLang: 'zh',
-      timestamp: 1720000090000, isMe: false,
-    },
-    {
-      id: '5', sender: '星辰大海', avatar: '🌟',
-      text: 'GG！刚才那波团战太精彩了', originalLang: 'zh',
-      timestamp: 1720000120000, isMe: false,
-    },
-    {
-      id: '6', sender: '暗夜猎手', avatar: '🐺',
-      text: 'I\'ll play support, don\'t worry', originalLang: 'en',
-      timestamp: 1720000150000, isMe: false,
-    },
-  ]);
+  // Messages state
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // Waiting animation dots
+  useEffect(() => {
+    if (roomStatus !== 'waiting') return;
+    const interval = setInterval(() => {
+      setWaitingDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 500);
+    return () => clearInterval(interval);
+  }, [roomStatus]);
+
+  // Simulate companion joining after waiting
+  useEffect(() => {
+    if (roomStatus !== 'waiting' || !matchedCompanion) return;
+
+    const timer = setTimeout(() => {
+      // Add companion to members
+      setMembers(prev => [...prev, {
+        id: matchedCompanion.id,
+        nickname: matchedCompanion.nickname,
+        avatar: matchedCompanion.avatar,
+        isOnline: true,
+        role: 'companion',
+      }]);
+
+      // Update room status to active
+      setRoomStatus('active');
+
+      // Add system message
+      setMessages([{
+        id: nextId(),
+        sender: '系统',
+        avatar: '📢',
+        text: `陪玩 ${matchedCompanion.nickname} 已加入房间`,
+        originalLang: 'zh',
+        timestamp: nextTs(),
+        isMe: false,
+      }]);
+
+      // Companion sends a greeting after 1.5s
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: nextId(),
+          sender: matchedCompanion.nickname,
+          avatar: matchedCompanion.avatar,
+          text: '你好呀，我来了！这局我打什么位置？',
+          originalLang: 'zh',
+          timestamp: nextTs(),
+          isMe: false,
+        }]);
+      }, 1500);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [roomStatus, matchedCompanion, setRoomStatus, nextId, nextTs]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -169,6 +201,26 @@ export default function ChannelsPage() {
     };
     setMessages(prev => [...prev, newMsg]);
     setInputText('');
+
+    // Simulate companion reply after 2s
+    if (matchedCompanion && roomStatus === 'active') {
+      setTimeout(() => {
+        const replies = [
+          '好的，我选蔡文姬跟你，放心交给我',
+          '开团开团！',
+          'GG！刚才那波团战太精彩了',
+        ];
+        setMessages(prev => [...prev, {
+          id: nextId(),
+          sender: matchedCompanion.nickname,
+          avatar: matchedCompanion.avatar,
+          text: replies[Math.floor(Math.random() * replies.length)],
+          originalLang: 'zh',
+          timestamp: nextTs(),
+          isMe: false,
+        }]);
+      }, 2000);
+    }
   };
 
   const handleInvite = (invitee: { id: string; nickname: string; avatar: string }) => {
@@ -180,7 +232,6 @@ export default function ChannelsPage() {
       isOnline: true,
       role: 'member',
     }]);
-    // Add system message
     const sysMsg: ChatMessage = {
       id: nextId(),
       sender: '系统',
@@ -200,6 +251,63 @@ export default function ChannelsPage() {
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   };
 
+  // Room title
+  const roomTitle = matchedCompanion
+    ? `${matchedCompanion.nickname}的开黑房间`
+    : '开黑聊天室';
+
+  // ========== WAITING STATE ==========
+  if (roomStatus === 'waiting') {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center px-6">
+        {/* Pulsing ring animation */}
+        <div className="relative w-32 h-32 mb-8">
+          <div className="absolute inset-0 rounded-full border-2 border-purple-500/30 animate-ping" />
+          <div className="absolute inset-2 rounded-full border-2 border-purple-500/20 animate-pulse" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full glass-card flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+            </div>
+          </div>
+        </div>
+
+        <h2 className="text-lg font-bold text-white mb-2">正在等待打手加入{waitingDots}</h2>
+        <p className="text-sm text-muted-foreground text-center mb-6">
+          已为您匹配到合适的陪玩，正在等待对方进入房间
+        </p>
+
+        {/* Matched companion preview */}
+        {matchedCompanion && (
+          <div className="glass-card rounded-2xl p-4 w-full max-w-xs text-center">
+            <div className="w-14 h-14 rounded-full mx-auto mb-2 gradient-primary flex items-center justify-center text-2xl">
+              {matchedCompanion.avatar}
+            </div>
+            <p className="text-sm font-bold text-white">{matchedCompanion.nickname}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {matchedCompanion.rank} · ¥{matchedCompanion.price}/局
+            </p>
+            <div className="flex items-center justify-center gap-1 mt-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[10px] text-amber-400">正在连接中</span>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel button */}
+        <button
+          onClick={() => {
+            setRoomStatus('idle');
+            window.history.back();
+          }}
+          className="mt-8 px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground hover:bg-white/10 transition-all"
+        >
+          取消等待
+        </button>
+      </div>
+    );
+  }
+
+  // ========== CHAT STATE ==========
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
@@ -207,7 +315,7 @@ export default function ChannelsPage() {
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white truncate">王者荣耀开黑群</h2>
+              <h2 className="text-base font-bold text-white truncate">{roomTitle}</h2>
               <span className="text-[10px] text-muted-foreground flex-shrink-0">
                 {members.length}人
               </span>
@@ -238,15 +346,15 @@ export default function ChannelsPage() {
                 showMembers ? 'gradient-primary text-white' : 'bg-white/5 text-muted-foreground hover:bg-white/10'
               }`}
             >
-              <Volume2 className="w-4 h-4" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
 
-            {/* More */}
+            {/* More / Invite */}
             <button
               onClick={() => { setShowInvite(!showInvite); setShowMembers(false); }}
               className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-white/10"
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <UserPlus className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -364,6 +472,11 @@ export default function ChannelsPage() {
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+        {messages.length === 0 && roomStatus === 'active' && (
+          <div className="text-center py-12">
+            <p className="text-sm text-muted-foreground">房间已就绪，开始聊天吧！</p>
+          </div>
+        )}
         {messages.map((msg, idx) => {
           const isSystem = msg.sender === '系统';
           const translated = targetLang !== 'zh' ? getTranslation(msg.text, targetLang) : undefined;
