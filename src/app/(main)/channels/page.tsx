@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
+import { Mic } from 'lucide-react';
 import {
   Send, Languages, Plus, X, ChevronDown,
   UserPlus, MoreHorizontal, Loader2
@@ -303,6 +304,23 @@ export default function ChannelsPage() {
         >
           取消等待
         </button>
+      </div>
+    );
+  }
+
+  // ========== EMPTY STATE (no order) ==========
+  if (!matchedCompanion && roomStatus === 'idle') {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen px-8">
+        <div className="w-20 h-20 rounded-2xl bg-white/5 flex items-center justify-center mb-5">
+          <Mic className="w-8 h-8 text-white/20" />
+        </div>
+        <p className="text-white/40 text-sm text-center leading-relaxed">
+          下单后会自动进入房间
+        </p>
+        <p className="text-white/25 text-xs mt-2 text-center">
+          在派单页面选择陪玩师，匹配成功后将自动进入开黑房间
+        </p>
       </div>
     );
   }
