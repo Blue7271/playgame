@@ -95,7 +95,7 @@ const VOICE_MESSAGES = [
 ];
 
 export default function ChannelsPage() {
-  const { user, roomStatus, matchedCompanion, setRoomStatus } = useAppStore();
+  const { user, roomStatus, roomMode, matchedCompanion, setRoomStatus } = useAppStore();
   const idCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const tsRef = useRef(1720000200000);
@@ -418,6 +418,11 @@ export default function ChannelsPage() {
     );
   }
 
+  // ========== FREE MIC MODE ==========
+  if (roomMode === 'freemic') {
+    return <FreeMicMode />;
+  }
+
   // ========== CHAT STATE ==========
   return (
     <div className="flex flex-col h-screen">
@@ -661,6 +666,304 @@ export default function ChannelsPage() {
           >
             <Send className="w-4 h-4" />
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== FREE MIC MODE COMPONENT ==========
+function FreeMicMode() {
+  const { user, roomStatus, matchedCompanion, setRoomStatus } = useAppStore();
+
+  const [micOn, setMicOn] = useState(false);
+  const [speakerOn, setSpeakerOn] = useState(true);
+  const [waitingDots, setWaitingDots] = useState('');
+  const [companions, setCompanions] = useState<Array<{
+    id: string;
+    nickname: string;
+    avatar: string;
+    isSpeaking: boolean;
+    joinedAt: number;
+  }>>([]);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Waiting animation
+  useEffect(() => {
+    if (roomStatus !== 'waiting') return;
+    const interval = setInterval(() => {
+      setWaitingDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 500);
+    return () => clearInterval(interval);
+  }, [roomStatus]);
+
+  // Timer
+  useEffect(() => {
+    if (roomStatus !== 'active') return;
+    const interval = setInterval(() => {
+      setElapsed(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [roomStatus]);
+
+  // Simulate companions joining
+  useEffect(() => {
+    if (roomStatus !== 'waiting' || !matchedCompanion) return;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // First companion joins after 3s
+    timers.push(setTimeout(() => {
+      setCompanions([{
+        id: matchedCompanion.id,
+        nickname: matchedCompanion.nickname,
+        avatar: matchedCompanion.avatar,
+        isSpeaking: true,
+        joinedAt: Date.now(),
+      }]);
+      setRoomStatus('active');
+    }, 3000));
+
+    // Second companion joins after 6s
+    timers.push(setTimeout(() => {
+      setCompanions(prev => [...prev, {
+        id: 'comp2',
+        nickname: '雷霆战神',
+        avatar: '⚡',
+        isSpeaking: true,
+        joinedAt: Date.now(),
+      }]);
+    }, 6000));
+
+    // Third companion joins after 10s
+    timers.push(setTimeout(() => {
+      setCompanions(prev => [...prev, {
+        id: 'comp3',
+        nickname: '樱花酱',
+        avatar: '🌸',
+        isSpeaking: false,
+        joinedAt: Date.now(),
+      }]);
+    }, 10000));
+
+    return () => timers.forEach(clearTimeout);
+  }, [roomStatus, matchedCompanion, setRoomStatus]);
+
+  // Simulate speaking status changes
+  useEffect(() => {
+    if (roomStatus !== 'active') return;
+    const interval = setInterval(() => {
+      setCompanions(prev => prev.map(c => ({
+        ...c,
+        isSpeaking: Math.random() > 0.4,
+      })));
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [roomStatus]);
+
+  const formatElapsed = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  // ========== WAITING STATE ==========
+  if (roomStatus === 'waiting') {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center px-6">
+        <div className="relative w-32 h-32 mb-8">
+          <div className="absolute inset-0 rounded-full border-2 border-pink-500/30 animate-ping" />
+          <div className="absolute inset-2 rounded-full border-2 border-pink-500/20 animate-pulse" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full glass-card flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+            </div>
+          </div>
+        </div>
+
+        <h2 className="text-lg font-bold text-white mb-2">正在等待打手加入{waitingDots}</h2>
+        <p className="text-sm text-muted-foreground text-center mb-2">自由麦模式 · 打手将直接开麦语音</p>
+        <p className="text-xs text-muted-foreground text-center mb-6">匹配成功后将自动进入语音房间</p>
+
+        {matchedCompanion && (
+          <div className="glass-card rounded-2xl p-4 w-full max-w-xs text-center">
+            <div className="w-14 h-14 rounded-full mx-auto mb-2 gradient-primary flex items-center justify-center text-2xl">
+              {matchedCompanion.avatar}
+            </div>
+            <p className="text-sm font-bold text-white">{matchedCompanion.nickname}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {matchedCompanion.rank} · ¥{matchedCompanion.price}/局
+            </p>
+            <div className="flex items-center justify-center gap-1 mt-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[10px] text-amber-400">正在连接中</span>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => {
+            setRoomStatus('idle');
+            window.history.back();
+          }}
+          className="mt-8 px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground hover:bg-white/10 transition-all"
+        >
+          取消等待
+        </button>
+      </div>
+    );
+  }
+
+  // ========== ACTIVE FREE MIC STATE ==========
+  const allParticipants = [
+    {
+      id: 'me',
+      nickname: user?.nickname || '我',
+      avatar: user?.avatar || '🎮',
+      isSpeaking: micOn,
+      isMe: true,
+    },
+    ...companions.map(c => ({ ...c, isMe: false })),
+  ];
+
+  return (
+    <div className="flex flex-col h-screen">
+      {/* Header */}
+      <div className="px-4 pt-5 pb-3 glass-card border-b border-white/5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-white">自由麦开黑</h2>
+              <span className="text-[10px] text-muted-foreground">{allParticipants.length}人</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span className="text-[10px] text-emerald-400">{formatElapsed(elapsed)}</span>
+              <span className="text-[10px] text-muted-foreground ml-1">自由麦模式</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 rounded-lg bg-pink-500/15 border border-pink-500/25 text-pink-400 text-[10px]">
+              🎙️ 全程开麦
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Participants Grid */}
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="grid grid-cols-2 gap-4">
+          {allParticipants.map((p) => (
+            <div
+              key={p.id}
+              className={`relative rounded-2xl p-4 flex flex-col items-center transition-all ${
+                p.isSpeaking
+                  ? 'glass-card border border-purple-500/30'
+                  : 'glass-card border border-white/5'
+              } ${p.isMe ? 'ring-1 ring-purple-500/20' : ''}`}
+            >
+              {/* Speaking indicator ring */}
+              {p.isSpeaking && (
+                <div className="absolute inset-0 rounded-2xl border-2 border-purple-500/40 animate-pulse" />
+              )}
+
+              {/* Avatar */}
+              <div className={`relative w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-3 ${
+                p.isSpeaking ? 'gradient-primary' : 'bg-white/10'
+              }`}>
+                {p.avatar}
+                {p.isSpeaking && (
+                  <div className="absolute -bottom-1 -right-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500/90">
+                    {[...Array(3)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-0.5 bg-white rounded-full"
+                        style={{
+                          height: `${6 + Math.sin(i * 1.5) * 4}px`,
+                          animation: `pulse 0.8s ease-in-out ${i * 0.2}s infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {!p.isSpeaking && !p.isMe && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
+                    <Mic className="w-3 h-3 text-white/40" />
+                  </div>
+                )}
+                {p.isMe && micOn && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <Mic className="w-3 h-3 text-white" />
+                  </div>
+                )}
+                {p.isMe && !micOn && (
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                    <Mic className="w-3 h-3 text-white" />
+                  </div>
+                )}
+              </div>
+
+              {/* Name */}
+              <p className="text-xs font-medium text-white text-center">{p.nickname}</p>
+              {p.isMe && (
+                <span className="text-[10px] text-purple-400 mt-0.5">我</span>
+              )}
+              {!p.isMe && 'rank' in p && (
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  {(p as typeof companions[number] & { rank?: string }).rank || '陪玩'}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="px-4 py-4 glass-card border-t border-white/5">
+        <div className="flex items-center justify-center gap-6">
+          {/* Speaker */}
+          <button
+            onClick={() => setSpeakerOn(!speakerOn)}
+            className={`flex flex-col items-center gap-1`}
+          >
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+              speakerOn ? 'bg-white/10 text-white' : 'bg-red-500/20 text-red-400'
+            }`}>
+              <Volume2 className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              {speakerOn ? '关闭声音' : '开启声音'}
+            </span>
+          </button>
+
+          {/* Mic */}
+          <button
+            onClick={() => setMicOn(!micOn)}
+            className={`flex flex-col items-center gap-1`}
+          >
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
+              micOn ? 'gradient-primary text-white neon-glow' : 'bg-white/10 text-muted-foreground'
+            }`}>
+              <Mic className="w-6 h-6" />
+            </div>
+            <span className={`text-[10px] font-medium ${micOn ? 'text-purple-400' : 'text-muted-foreground'}`}>
+              {micOn ? '闭麦' : '开麦'}
+            </span>
+          </button>
+
+          {/* Hang up */}
+          <button
+            onClick={() => {
+              setRoomStatus('idle');
+              window.history.back();
+            }}
+            className="flex flex-col items-center gap-1"
+          >
+            <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white">
+              <X className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] text-red-400">挂断</span>
+          </button>
         </div>
       </div>
     </div>

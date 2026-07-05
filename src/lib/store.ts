@@ -65,6 +65,7 @@ interface AppState {
   // Matched companion & room state
   matchedCompanion: PlayerCompanion | null;
   roomStatus: 'idle' | 'waiting' | 'active';
+  roomMode: 'chat' | 'freemic' | null; // chat = 文字聊天+翻译, freemic = 自由麦
 
   // AI Assistant
   isAIAssistantOpen: boolean;
@@ -83,6 +84,7 @@ interface AppState {
   }>) => void;
   setMatchedCompanion: (companion: PlayerCompanion | null) => void;
   setRoomStatus: (status: 'idle' | 'waiting' | 'active') => void;
+  setRoomMode: (mode: 'chat' | 'freemic' | null) => void;
   toggleAIAssistant: () => void;
   logout: () => void;
 }
@@ -124,6 +126,7 @@ export const useAppStore = create<AppState>((set) => ({
   channels: MOCK_CHANNELS,
   matchedCompanion: null,
   roomStatus: 'idle',
+  roomMode: null,
   isAIAssistantOpen: false,
 
   setUser: (user) => set({ user, isAuthenticated: true }),
@@ -142,6 +145,7 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   setMatchedCompanion: (companion) => set({ matchedCompanion: companion }),
   setRoomStatus: (status) => set({ roomStatus: status }),
+  setRoomMode: (mode) => set({ roomMode: mode }),
   toggleAIAssistant: () => set((state) => ({ isAIAssistantOpen: !state.isAIAssistantOpen })),
   logout: () => set({
     user: null,
@@ -156,6 +160,7 @@ export const useAppStore = create<AppState>((set) => ({
     dispatchNote: '',
     matchedCompanion: null,
     roomStatus: 'idle',
+    roomMode: null,
     isAIAssistantOpen: false,
   }),
 }));
