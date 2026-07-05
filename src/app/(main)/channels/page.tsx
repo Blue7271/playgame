@@ -121,6 +121,16 @@ export default function ChannelsPage() {
     return `msg-${Date.now()}-${idCounterRef.current}`;
   }, []);
 
+  // Reset join state when roomStatus changes to waiting (new session)
+  useEffect(() => {
+    if (roomStatus === 'waiting') {
+      joinedRef.current = false;
+      msgIndexRef.current = 0;
+      setMessages([]);
+      setMembers([]);
+    }
+  }, [roomStatus]);
+
   // Auto scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
