@@ -3,10 +3,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Mic } from 'lucide-react';
 import {
   Send, Languages, Plus, X, ChevronDown,
-  UserPlus, MoreHorizontal, Loader2
+  UserPlus, MoreHorizontal, Loader2, Mic, Volume2
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -18,6 +17,8 @@ interface ChatMessage {
   translatedText?: string;
   timestamp: number;
   isMe: boolean;
+  isVoice?: boolean;
+  voiceDuration?: number; // seconds
 }
 
 interface Member {
@@ -52,15 +53,20 @@ const MOCK_TRANSLATIONS: Record<string, Record<string, string>> = {
     '等等我，马上到': 'Wait for me, I\'ll be right there',
     '好的，我玩射手': 'OK, I\'ll play marksman',
     '大家好，一起开黑吗？': 'Hey everyone, wanna play together?',
+    '老板好，我是你的陪玩，马上上线': 'Hey boss, I\'m your companion, logging in now',
+    '我打打野，帮你抓人': 'I\'ll jungle, help you gank',
+    '收到，我配合你': 'Got it, I\'ll follow your lead',
   },
   'ja': {
     '你好呀，我来了！这局我打什么位置？': 'やっほー、来たよ！今日はどのポジションやる？',
     '我玩射手，你辅助我': '私がマークスマンやるから、サポートして',
     '好的，我选蔡文姬跟你，放心交给我': 'わかった、蔡文姫ピックしてサポートするよ、任せて！',
+    '老板好，我是你的陪玩，马上上线': 'ボスこんにちは、あなたの付き添いです、すぐオンラインします',
   },
   'ko': {
     '你好呀，我来了！这局我打什么位置？': '안녕, 나 왔어! 이번 판 어떤 포지션 할까?',
     '我玩射手，你辅助我': '내가 원딜 할게, 너 서포트 해줘',
+    '老板好，我是你的陪玩，马上上线': '보스 안녕하세요, 당신의 컴패니언입니다, 바로 온라인 할게요',
   },
 };
 
@@ -70,6 +76,23 @@ function getTranslation(text: string, targetLang: string): string | undefined {
   if (langMap && langMap[text]) return langMap[text];
   return `[${TRANSLATION_LANGUAGES.find(l => l.code === targetLang)?.flag || ''}] ${text}`;
 }
+
+// Mock companions that will join the room
+const MOCK_COMPANIONS = [
+  { id: 'comp1', nickname: '小鹿', avatar: '🦌', rank: '黄金', price: 30 },
+  { id: 'comp2', nickname: '雷霆战神', avatar: '⚡', rank: '钻石', price: 50 },
+  { id: 'comp3', nickname: '樱花酱', avatar: '🌸', rank: '铂金', price: 35 },
+];
+
+// Voice messages that companions will send
+const VOICE_MESSAGES = [
+  { text: '老板好，我是你的陪玩，马上上线', duration: 3 },
+  { text: '你好呀，我来了！这局我打什么位置？', duration: 4 },
+  { text: '我玩射手，你辅助我', duration: 2 },
+  { text: '好的，我选蔡文姬跟你，放心交给我', duration: 4 },
+  { text: '开团开团！', duration: 2 },
+  { text: 'GG！刚才那波团战太精彩了', duration: 3 },
+];
 
 export default function ChannelsPage() {
   const { user, roomStatus, matchedCompanion, setRoomStatus } = useAppStore();
@@ -102,30 +125,17 @@ export default function ChannelsPage() {
   const [inputText, setInputText] = useState('');
   const [waitingDots, setWaitingDots] = useState('');
 
-  // Build initial members based on whether we came from auto-dispatch
-  const [members, setMembers] = useState<Member[]>(() => {
-    const base: Member[] = [
-      { id: 'me', nickname: user?.nickname || '我', avatar: user?.avatar || '🎮', isOnline: true, role: 'owner' },
-    ];
-    // If we have a matched companion and room is active, add them
-    if (matchedCompanion && roomStatus === 'active') {
-      base.push({
-        id: matchedCompanion.id,
-        nickname: matchedCompanion.nickname,
-        avatar: matchedCompanion.avatar,
-        isOnline: true,
-        role: 'companion',
-      });
-    }
-    return base;
-  });
+  // Build initial members - only the player
+  const [members, setMembers] = useState<Member[]>(() => [
+    { id: 'me', nickname: user?.nickname || '我', avatar: user?.avatar || '🎮', isOnline: true, role: 'owner' },
+  ]);
 
   // Available players to invite
   const availableToInvite = [
-    { id: 'inv1', nickname: '雷霆战神', avatar: '⚡' },
-    { id: 'inv2', nickname: '樱花酱', avatar: '🌸' },
-    { id: 'inv3', nickname: '孤狼', avatar: '🦊' },
-    { id: 'inv4', nickname: '风暴骑士', avatar: '🛡️' },
+    { id: 'inv1', nickname: '风暴骑士', avatar: '🛡️' },
+    { id: 'inv2', nickname: '孤狼', avatar: '🦊' },
+    { id: 'inv3', nickname: '月光女神', avatar: '🌙' },
+    { id: 'inv4', nickname: '烈焰法师', avatar: '🔥' },
   ];
 
   // Messages state
@@ -140,12 +150,14 @@ export default function ChannelsPage() {
     return () => clearInterval(interval);
   }, [roomStatus]);
 
-  // Simulate companion joining after waiting
+  // Simulate multiple companions joining one by one
   useEffect(() => {
     if (roomStatus !== 'waiting' || !matchedCompanion) return;
 
-    const timer = setTimeout(() => {
-      // Add companion to members
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // First companion joins after 3s (the matched one)
+    timers.push(setTimeout(() => {
       setMembers(prev => [...prev, {
         id: matchedCompanion.id,
         nickname: matchedCompanion.nickname,
@@ -154,10 +166,6 @@ export default function ChannelsPage() {
         role: 'companion',
       }]);
 
-      // Update room status to active
-      setRoomStatus('active');
-
-      // Add system message
       setMessages([{
         id: nextId(),
         sender: '系统',
@@ -168,22 +176,109 @@ export default function ChannelsPage() {
         isMe: false,
       }]);
 
-      // Companion sends a greeting after 1.5s
-      setTimeout(() => {
+      // First companion sends voice message after 2s
+      timers.push(setTimeout(() => {
+        const voiceText = VOICE_MESSAGES[0].text;
         setMessages(prev => [...prev, {
           id: nextId(),
           sender: matchedCompanion.nickname,
           avatar: matchedCompanion.avatar,
-          text: '你好呀，我来了！这局我打什么位置？',
+          text: voiceText,
           originalLang: 'zh',
+          translatedText: getTranslation(voiceText, targetLang),
           timestamp: nextTs(),
           isMe: false,
+          isVoice: true,
+          voiceDuration: VOICE_MESSAGES[0].duration,
         }]);
-      }, 1500);
-    }, 3000);
+      }, 2000));
+    }, 3000));
 
-    return () => clearTimeout(timer);
-  }, [roomStatus, matchedCompanion, setRoomStatus, nextId, nextTs]);
+    // Second companion joins after 6s
+    timers.push(setTimeout(() => {
+      const comp2 = MOCK_COMPANIONS[1];
+      setMembers(prev => [...prev, {
+        id: comp2.id,
+        nickname: comp2.nickname,
+        avatar: comp2.avatar,
+        isOnline: true,
+        role: 'companion',
+      }]);
+
+      setMessages(prev => [...prev, {
+        id: nextId(),
+        sender: '系统',
+        avatar: '📢',
+        text: `陪玩 ${comp2.nickname} 已加入房间`,
+        originalLang: 'zh',
+        timestamp: nextTs(),
+        isMe: false,
+      }]);
+
+      // Second companion sends voice message after 1.5s
+      timers.push(setTimeout(() => {
+        const voiceText = VOICE_MESSAGES[1].text;
+        setMessages(prev => [...prev, {
+          id: nextId(),
+          sender: comp2.nickname,
+          avatar: comp2.avatar,
+          text: voiceText,
+          originalLang: 'zh',
+          translatedText: getTranslation(voiceText, targetLang),
+          timestamp: nextTs(),
+          isMe: false,
+          isVoice: true,
+          voiceDuration: VOICE_MESSAGES[1].duration,
+        }]);
+      }, 1500));
+    }, 6000));
+
+    // Third companion joins after 10s
+    timers.push(setTimeout(() => {
+      const comp3 = MOCK_COMPANIONS[2];
+      setMembers(prev => [...prev, {
+        id: comp3.id,
+        nickname: comp3.nickname,
+        avatar: comp3.avatar,
+        isOnline: true,
+        role: 'companion',
+      }]);
+
+      setMessages(prev => [...prev, {
+        id: nextId(),
+        sender: '系统',
+        avatar: '📢',
+        text: `陪玩 ${comp3.nickname} 已加入房间`,
+        originalLang: 'zh',
+        timestamp: nextTs(),
+        isMe: false,
+      }]);
+
+      // Third companion sends voice message after 2s
+      timers.push(setTimeout(() => {
+        const voiceText = VOICE_MESSAGES[2].text;
+        setMessages(prev => [...prev, {
+          id: nextId(),
+          sender: comp3.nickname,
+          avatar: comp3.avatar,
+          text: voiceText,
+          originalLang: 'zh',
+          translatedText: getTranslation(voiceText, targetLang),
+          timestamp: nextTs(),
+          isMe: false,
+          isVoice: true,
+          voiceDuration: VOICE_MESSAGES[2].duration,
+        }]);
+      }, 2000));
+    }, 10000));
+
+    // Update room status to active after first companion joins
+    timers.push(setTimeout(() => {
+      setRoomStatus('active');
+    }, 3000));
+
+    return () => timers.forEach(clearTimeout);
+  }, [roomStatus, matchedCompanion, setRoomStatus, nextId, nextTs, targetLang]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -203,22 +298,22 @@ export default function ChannelsPage() {
     setMessages(prev => [...prev, newMsg]);
     setInputText('');
 
-    // Simulate companion reply after 2s
+    // Simulate companion reply with voice message after 2s
     if (matchedCompanion && roomStatus === 'active') {
       setTimeout(() => {
-        const replies = [
-          '好的，我选蔡文姬跟你，放心交给我',
-          '开团开团！',
-          'GG！刚才那波团战太精彩了',
-        ];
+        const voiceIdx = Math.min(3 + Math.floor(Math.random() * 3), VOICE_MESSAGES.length - 1);
+        const voiceText = VOICE_MESSAGES[voiceIdx].text;
         setMessages(prev => [...prev, {
           id: nextId(),
           sender: matchedCompanion.nickname,
           avatar: matchedCompanion.avatar,
-          text: replies[Math.floor(Math.random() * replies.length)],
+          text: voiceText,
           originalLang: 'zh',
+          translatedText: getTranslation(voiceText, targetLang),
           timestamp: nextTs(),
           isMe: false,
+          isVoice: true,
+          voiceDuration: VOICE_MESSAGES[voiceIdx].duration,
         }]);
       }, 2000);
     }
@@ -253,9 +348,7 @@ export default function ChannelsPage() {
   };
 
   // Room title
-  const roomTitle = matchedCompanion
-    ? `${matchedCompanion.nickname}的开黑房间`
-    : '开黑聊天室';
+  const roomTitle = '开黑聊天室';
 
   // ========== WAITING STATE ==========
   if (roomStatus === 'waiting') {
@@ -447,112 +540,102 @@ export default function ChannelsPage() {
       {showMembers && (
         <div className="px-4 py-3 glass-card border-b border-white/5 animate-slide-up">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-white">群成员</span>
-            <button
-              onClick={() => { setShowInvite(true); setShowMembers(false); }}
-              className="ml-auto flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
-            >
-              <Plus className="w-3 h-3" /> 邀请
-            </button>
+            <span className="text-xs text-muted-foreground">群成员</span>
+            <span className="text-[10px] text-white/40">({members.length})</span>
           </div>
           <div className="flex flex-wrap gap-3">
             {members.map(m => (
               <div key={m.id} className="flex flex-col items-center gap-1">
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl">
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg">
                     {m.avatar}
                   </div>
                   {m.isOnline && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-[#0A0A0F]" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#12121F]" />
                   )}
                 </div>
-                <span className="text-[10px] text-muted-foreground max-w-[48px] truncate">
-                  {m.nickname}
-                </span>
-                {m.role === 'companion' && (
-                  <span className="text-[8px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">陪玩</span>
-                )}
+                <span className="text-[10px] text-white/60 max-w-[48px] truncate">{m.nickname}</span>
               </div>
             ))}
-            {/* Invite placeholder */}
-            <button
-              onClick={() => { setShowInvite(true); setShowMembers(false); }}
-              className="flex flex-col items-center gap-1"
-            >
-              <div className="w-10 h-10 rounded-xl border border-dashed border-white/15 flex items-center justify-center">
-                <Plus className="w-4 h-4 text-white/30" />
-              </div>
-              <span className="text-[10px] text-white/20">邀请</span>
-            </button>
           </div>
         </div>
       )}
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
-        {messages.length === 0 && roomStatus === 'active' && (
-          <div className="text-center py-12">
-            <p className="text-sm text-muted-foreground">房间已就绪，开始聊天吧！</p>
-          </div>
-        )}
-        {messages.map((msg, idx) => {
-          const isSystem = msg.sender === '系统';
-          const translated = targetLang !== 'zh' ? getTranslation(msg.text, targetLang) : undefined;
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {messages.map((msg) => {
+          // System message
+          if (msg.sender === '系统') {
+            return (
+              <div key={msg.id} className="flex justify-center">
+                <span className="text-[10px] text-white/30 bg-white/5 px-3 py-1 rounded-full">
+                  {msg.text}
+                </span>
+              </div>
+            );
+          }
 
-          // Show time separator if gap > 3 min
-          const showTimeSep = idx === 0 || (msg.timestamp - messages[idx - 1].timestamp > 180000);
+          const isMe = msg.isMe;
+          const translated = !isMe && targetLang !== 'zh'
+            ? getTranslation(msg.text, targetLang)
+            : undefined;
 
           return (
-            <div key={msg.id}>
-              {showTimeSep && (
-                <div className="text-center py-2">
-                  <span className="text-[10px] text-white/20 bg-white/5 px-2 py-0.5 rounded">
-                    {formatTime(msg.timestamp)}
-                  </span>
-                </div>
-              )}
+            <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+              {/* Avatar */}
+              <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-base flex-shrink-0">
+                {msg.avatar}
+              </div>
 
-              {isSystem ? (
-                <div className="text-center py-1.5">
-                  <span className="text-[10px] text-muted-foreground bg-white/5 px-3 py-1 rounded-full">
-                    {msg.text}
-                  </span>
+              {/* Message */}
+              <div className={`max-w-[75%] ${isMe ? 'text-right' : ''}`}>
+                <div className={`flex items-center gap-1.5 mb-0.5 ${isMe ? 'justify-end' : ''}`}>
+                  <span className="text-[10px] text-white/40">{msg.sender}</span>
+                  <span className="text-[10px] text-white/20">{formatTime(msg.timestamp)}</span>
                 </div>
-              ) : (
-                <div className={`flex gap-2.5 mb-3 ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* Avatar */}
-                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-lg flex-shrink-0">
-                    {msg.avatar}
-                  </div>
 
-                  {/* Bubble */}
-                  <div className={`max-w-[72%] flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-                    <span className="text-[10px] text-muted-foreground mb-0.5 px-1">{msg.sender}</span>
-                    <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${
-                      msg.isMe
-                        ? 'gradient-primary text-white rounded-tr-sm'
-                        : 'glass-card text-white rounded-tl-sm'
-                    }`}>
-                      {msg.text}
+                {/* Voice message bubble */}
+                {msg.isVoice ? (
+                  <div className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-2xl ${
+                    isMe
+                      ? 'gradient-primary text-white rounded-tr-sm'
+                      : 'glass-card text-white rounded-tl-sm'
+                  }`}>
+                    <Volume2 className="w-3.5 h-3.5 flex-shrink-0" />
+                    <div className="flex items-center gap-0.5">
+                      {[...Array(12)].map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-0.5 rounded-full ${isMe ? 'bg-white/60' : 'bg-purple-400/60'}`}
+                          style={{
+                            height: `${8 + Math.sin(i * 0.8) * 8 + Math.random() * 4}px`,
+                            animation: `pulse 1.5s ease-in-out ${i * 0.1}s infinite`,
+                          }}
+                        />
+                      ))}
                     </div>
-
-                    {/* Translation */}
-                    {translated && (
-                      <div className={`flex items-start gap-1 mt-1 px-1 max-w-full ${msg.isMe ? 'flex-row-reverse' : ''}`}>
-                        <Languages className="w-3 h-3 text-blue-400/50 flex-shrink-0 mt-0.5" />
-                        <span className="text-[11px] text-blue-400/60 italic leading-relaxed break-words">
-                          {translated}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Time */}
-                    <span className="text-[9px] text-white/15 mt-0.5 px-1">
-                      {formatTime(msg.timestamp)}
-                    </span>
+                    <span className="text-[10px] opacity-60">{msg.voiceDuration}&quot;</span>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className={`inline-block px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                    isMe
+                      ? 'gradient-primary text-white rounded-tr-sm'
+                      : 'glass-card text-white rounded-tl-sm'
+                  }`}>
+                    {msg.text}
+                  </div>
+                )}
+
+                {/* Translation below message */}
+                {translated && (
+                  <div className={`mt-1 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/15 inline-block`}>
+                    <p className="text-[11px] text-blue-300/80 leading-relaxed">
+                      <Languages className="w-3 h-3 inline mr-1 -mt-0.5" />
+                      {translated}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -560,31 +643,25 @@ export default function ChannelsPage() {
       </div>
 
       {/* Input Bar */}
-      <div className="px-4 py-3 glass-card border-t border-white/5 bottom-nav-safe">
+      <div className="px-4 py-3 glass-card border-t border-white/5">
         <div className="flex items-center gap-2">
           <input
+            type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="输入消息..."
-            className="flex-1 h-10 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white placeholder:text-white/30 outline-none focus:border-purple-500/50 transition-colors"
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/40 transition-colors"
           />
           <Button
+            size="icon"
             onClick={handleSendMessage}
             disabled={!inputText.trim()}
-            className="h-10 w-10 p-0 gradient-primary text-white rounded-xl flex-shrink-0 disabled:opacity-40"
+            className="w-10 h-10 rounded-xl gradient-primary text-white flex-shrink-0 disabled:opacity-40"
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        {targetLang !== 'zh' && (
-          <div className="flex items-center gap-1 mt-1.5 px-1">
-            <Languages className="w-3 h-3 text-blue-400/40" />
-            <span className="text-[10px] text-blue-400/40">
-              消息将自动翻译为 {currentLang?.flag} {currentLang?.label}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );
